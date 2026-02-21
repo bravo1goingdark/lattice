@@ -1,7 +1,71 @@
+//! Streaming Tokenizer Module
+//!
+//! This module provides a zero-allocation tokenizer that splits normalized text into
+//! individual tokens for indexing. It's the second stage in our text processing pipeline,
+//! taking clean, normalized text and breaking it into searchable units.
+//!
+//! ## What It Does
+//!
+//! Given normalized input like `"hello world foo bar"`, it emits each word as a token
+//! with its position in the document:
+//!
+//! ```ignore
+//! ("hello", Field::Body, 0)
+//! ("world", Field::Body, 1)
+//! ("foo", Field::Body, 2)
+//! ("bar", Field::Body, 3)
+//! ```
+//!
+//! ## Key Features
+//!
+//! - **Zero Allocation**: Tokens are slices of the original string, not new allocations
+//! - **Streaming**: Uses a callback to emit tokens, no intermediate collection
+//! - **Fast**: Simple byte-scan for ASCII space (0x20) splitting
+//! - **Field-Aware**: Can specify which document field (title, body, tag) tokens belong to
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use lattice_core::analyzer::tokenizer::{Tokenizer, Field};
+//!
+//! let tokenizer = Tokenizer::new(Field::Body);
+//!
+//! // Tokens are emitted via callback - no allocation!
+//! tokenizer.tokenize("hello world", |text, field, position| {
+//!     println!("Token: '{}' at position {} in {:?}", text, position, field);
+//! });
+//! // Output:
+//! // Token: 'hello' at position 0 in Body
+//! // Token: 'world' at position 1 in Body
+//! ```
+//!
+//! ## The Input Contract
+//!
+//! The tokenizer expects **pre-normalized** input. This means:
+//! - ASCII-only text (or the tokenizer may not split correctly)
+//! - All lowercase
+//! - No leading or trailing whitespace
+//! - No consecutive spaces between words
+//!
+//! If you violate this contract, the tokenizer will panic in debug mode with a helpful message.
+//!
+//! ## Field Weights
+//!
+//! Different fields have different relevance for search scoring:
+//! - **Title**: 3.0x weight (most important)
+//! - **Tag**: 2.0x weight
+//! - **Body**: 1.0x weight (baseline)
+//!
+//! The weights are available via `Field::weight()` and are used during relevance scoring.
+
 use core::str;
 use memchr::memchr_iter;
 
 /// Logical document field.
+///
+/// In a typical search system, documents have different parts with different
+/// importance. A title word is usually more important than the same word in
+/// the body text. This enum represents those different fields.
 ///
 /// `#[repr(u8)]` guarantees stable 1-byte layout for compact storage
 /// in posting lists or other packed index structures.
@@ -28,18 +92,47 @@ impl Field {
     }
 }
 
-/// Streaming tokenizer.
+/// Streaming tokenizer - splits normalized text into tokens.
 ///
-/// Zero allocation. Emits `(text, field, position)` directly to caller.
+/// A lightweight, zero-allocation tokenizer that takes normalized text and
+/// emits tokens one by one via a callback. Think of it as a simple word splitter
+/// that also tracks where each word appears (position) and which field it came from.
 ///
-/// Contract:
-/// - Input must be normalized:
-///   - ASCII only
-///   - Lowercase
-///   - No leading/trailing spaces
-///   - No consecutive spaces
+/// ## Zero Allocation
 ///
-/// Splitting is a single forward byte scan on ASCII space (`0x20`).
+/// Tokens are not copied—they're slices (`&str`) into the original input string.
+/// This means no heap allocations during tokenization, just a fast byte scan.
+///
+/// ## The Contract
+///
+/// ⚠️ This tokenizer expects **pre-normalized** input! Specifically:
+/// - ASCII-only text (for reliable space-splitting)
+/// - All lowercase
+/// - No leading/trailing whitespace
+/// - No consecutive spaces
+///
+/// If you violate this, you'll get a helpful panic in debug builds.
+///
+/// ## Example
+///
+/// ```
+/// use lattice_core::analyzer::tokenizer::{Tokenizer, Field};
+///
+/// let tokenizer = Tokenizer::new(Field::Body);
+/// let mut count = 0;
+///
+/// tokenizer.tokenize("hello world foo", |text, field, pos| {
+///     count += 1;
+///     // Each token is a slice of the original - no allocation!
+/// });
+///
+/// assert_eq!(count, 3);
+/// ```
+///
+/// ## How It Works
+///
+/// It does a single forward scan looking for ASCII space bytes (0x20).
+/// Each non-space run between spaces becomes a token. Simple and fast.
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 pub struct Tokenizer {

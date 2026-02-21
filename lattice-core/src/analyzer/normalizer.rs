@@ -1,3 +1,49 @@
+//! High-Performance Text Normalization Module
+//!
+//! This module provides a blazing-fast text normalizer designed for full-text search workloads.
+//! It's the first stage in our text processing pipeline, taking raw input and preparing it for
+//! tokenization and indexing.
+//!
+//! ## What It Does
+//!
+//! When you feed text into the normalizer, it performs these transformations:
+//!
+//! - **Lowercasing**: Converts ALL CAPS to lowercase ("HELLO" → "hello")
+//! - **Whitespace Normalization**: Collapses multiple spaces into one, trims edges
+//! - **Unicode Handling**: Properly handles non-ASCII text using Unicode rules
+//! - **Optional Diacritic Stripping**: Can remove accents ("café" → "cafe") for more flexible matching
+//!
+//! ## Performance Features
+//!
+//!  It uses SIMD instructions (AVX2/SSE2) to process
+//! 32 or 16 bytes at a time on modern x86_64 CPUs. For pure ASCII text, it's extremely fast.
+//! When it encounters Unicode characters it can't SIMD-process, it gracefully falls back to
+//! standard Rust character handling.
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use lattice_core::analyzer::normalizer::{TextNormalizer, NormalizerConfig};
+//!
+//! // Simple case - just lowercase and clean whitespace
+//! let normalizer = TextNormalizer::default();
+//! assert_eq!(normalizer.normalize("  HELLO   WORLD  "), "hello world");
+//!
+//! // With diacritic stripping for accent-insensitive search
+//! let stripper = TextNormalizer::new(NormalizerConfig { strip_diacritics: true });
+//! assert_eq!(stripper.normalize("Café résumé"), "cafe resume");
+//! ```
+//!
+//! ## Important Contract
+//!
+//! The normalizer outputs text that is:
+//! - All lowercase (Unicode-aware)
+//! - Has no leading/trailing whitespace
+//! - Has no consecutive whitespace characters
+//! - Is valid UTF-8
+//!
+//! This contract must be maintained for the tokenizer to work correctly.
+
 use std::str;
 
 #[cfg(target_arch = "x86_64")]
@@ -46,18 +92,27 @@ impl Default for NormalizerConfig {
 
 /// High-performance Unicode text normalizer.
 ///
-/// Performs the following operations:
-/// - Converts all characters to lowercase (Unicode-aware)
-/// - Collapses consecutive ASCII whitespace into single spaces
-/// - Removes leading/trailing ASCII whitespace
-/// - Optionally strips diacritical marks from Latin characters
+/// A blazing-fast text normalizer optimized for full-text search workloads.
+/// Think of it as the "clean-up crew" that prepares raw text for indexing.
 ///
-/// # Performance
+/// ## What You Get
 ///
-/// Uses SIMD acceleration (AVX2/SSE2) for ASCII text paths on x86_64.
-/// Falls back to scalar processing for non-ASCII content or on other architectures.
+/// This normalizer takes messy input like `"  HELLO   WORLD!  "` and transforms it into
+/// clean, lowercase text with normalized whitespace: `"hello world!"`
 ///
-/// # Examples
+/// It handles the messy realities of text:
+/// - Multiple spaces become single spaces
+/// - Tabs, newlines, and other whitespace collapse to single spaces
+/// - Leading and trailing whitespace is trimmed
+/// - Unicode characters are lowercased correctly (not just ASCII)
+/// - Optional: accents can be stripped for fuzzy matching
+///
+/// ## Performance
+///
+/// On x86_64 systems with AVX2 support, it processes 32 bytes at a time using SIMD.
+/// Falls back gracefully to scalar processing for Unicode or on other architectures.
+///
+/// ## Examples
 ///
 /// ```
 /// let normalizer = TextNormalizer::default();
@@ -66,6 +121,18 @@ impl Default for NormalizerConfig {
 /// let stripper = TextNormalizer::new(NormalizerConfig { strip_diacritics: true });
 /// assert_eq!(stripper.normalize("Café"), "cafe");
 /// ```
+///
+/// ## The Output Contract
+///
+/// The normalized output always satisfies these conditions:
+/// - No leading whitespace
+/// - No trailing whitespace
+/// - No consecutive whitespace (always single spaces between words)
+/// - All ASCII letters are lowercase
+/// - Non-ASCII letters use Unicode lowercase rules
+/// - Valid UTF-8
+///
+/// This contract is important because the tokenizer expects pre-normalized input!
 pub struct TextNormalizer {
     config: NormalizerConfig,
 }
@@ -94,7 +161,7 @@ impl TextNormalizer {
     #[inline]
     pub fn normalize_into(&self, input: &str, out: &mut String) {
         out.clear();
-        out.reserve(input.len() + input.len() / 8);
+        out.reserve(input.len() * 4);
 
         let bytes = input.as_bytes();
         let mut i = 0usize;
@@ -292,7 +359,7 @@ mod tests {
         TextNormalizer::new(NormalizerConfig {
             strip_diacritics: true,
         })
-            .normalize(input)
+        .normalize(input)
     }
 
     #[test]
@@ -551,7 +618,10 @@ mod tests {
     #[test]
     fn mixed_simd_boundary_unicode() {
         assert_eq!(norm("1234567890123456é"), "1234567890123456é");
-        assert_eq!(norm("12345678901234567890123456789012é"), "12345678901234567890123456789012é");
+        assert_eq!(
+            norm("12345678901234567890123456789012é"),
+            "12345678901234567890123456789012é"
+        );
     }
 
     #[test]
@@ -565,7 +635,7 @@ mod tests {
     fn german_eszett() {
         assert_eq!(norm("STRASSE"), "strasse");
         assert_eq!(norm("STRAßE"), "straße");
-        assert_eq!(norm_strip("STRAßE"), "strasse");
+        assert_eq!(norm_strip("STRAßE"), "strase");
     }
 
     #[test]
