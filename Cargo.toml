@@ -6,3 +6,12 @@ members = [
 ]
 
 resolver = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.release-opt-size]
+inherits = "release"
+opt-level = "z"
+strip = true

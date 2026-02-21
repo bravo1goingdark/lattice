@@ -1,4 +1,5 @@
 use core::str;
+use memchr::memchr_iter;
 
 /// Logical document field.
 ///
@@ -53,7 +54,8 @@ impl Tokenizer {
 
     /// Tokenizes normalized input and emits `(text, field, position)`.
     ///
-    /// Position is `u32`. If overflow occurs, emission stops.
+    /// Position is `u32`. After emitting a token at position `u32::MAX`,
+    /// further emissions stop (overflow protection).
     #[inline(always)]
     #[allow(clippy::needless_lifetimes)]
     pub fn tokenize<'n, F>(&self, normalized: &'n str, mut emit: F)
@@ -96,36 +98,29 @@ impl Tokenizer {
             return;
         }
 
-        let len = bytes.len();
         let field = self.field;
-
         let mut start = 0usize;
         let mut pos = 0u32;
 
-        for i in 0..len {
-            if bytes[i] == b' ' {
-                if start < i {
-                    // SAFETY:
-                    // - `normalized` is valid UTF-8
-                    // - we split only on ASCII space (0x20)
-                    let text = unsafe { str::from_utf8_unchecked(&bytes[start..i]) };
-
-                    emit(text, field, pos);
-
-                    debug_assert!(pos != u32::MAX, "tokenizer: position overflow");
-                    if pos == u32::MAX {
-                        return;
-                    }
-
-                    pos += 1;
+        for i in memchr_iter(b' ', bytes) {
+            if start < i {
+                // SAFETY: `normalized` is valid UTF-8. We split only on ASCII space (0x20),
+                // which is never a continuation byte, so `bytes[start..i]` is always a
+                // valid UTF-8 subslice.
+                let text = unsafe { str::from_utf8_unchecked(&bytes[start..i]) };
+                emit(text, field, pos);
+                if pos == u32::MAX {
+                    return;
                 }
-                start = i + 1;
+                pos += 1;
             }
+            start = i + 1;
         }
 
-        // final token
-        if start < len {
-            let text = unsafe { str::from_utf8_unchecked(&bytes[start..len]) };
+        if start < bytes.len() {
+            // SAFETY: same invariants as above — `bytes[start..]` is a valid UTF-8
+            // subslice since `start` was set to `i + 1` after an ASCII space byte.
+            let text = unsafe { str::from_utf8_unchecked(&bytes[start..]) };
             emit(text, field, pos);
         }
     }
