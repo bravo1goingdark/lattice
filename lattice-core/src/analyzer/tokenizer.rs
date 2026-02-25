@@ -31,12 +31,10 @@
 //! let tokenizer = Tokenizer::new(Field::Body);
 //!
 //! // Tokens are emitted via callback - no allocation!
+//! // Callback receives: text (&str), field (Field), position (u32)
 //! tokenizer.tokenize("hello world", |text, field, position| {
-//!     println!("Token: '{}' at position {} in {:?}", text, position, field);
+//!     // Process token: text="hello"/"world", field=Body, position=0/1
 //! });
-//! // Output:
-//! // Token: 'hello' at position 0 in Body
-//! // Token: 'world' at position 1 in Body
 //! ```
 //!
 //! ## The Input Contract
@@ -72,8 +70,11 @@ use memchr::memchr_iter;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Field {
+    /// Document title - highest importance
     Title = 0,
+    /// Document body - baseline importance
     Body = 1,
+    /// Tags/categories - medium importance
     Tag = 2,
 }
 
@@ -140,6 +141,7 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    /// Creates a new tokenizer for the specified field.
     #[inline]
     pub const fn new(field: Field) -> Self {
         Self { field }
