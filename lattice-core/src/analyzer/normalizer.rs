@@ -57,6 +57,11 @@ impl TextNormalizer {
         out.reserve(len);
 
         unsafe {
+            // SAFETY: All pointer operations are valid because:
+            // - `out.reserve(len)` above ensures buffer has capacity for `len` bytes
+            // - `w` starts at 0 and increments only when writing, never exceeds `len`
+            // - All writes are at `buf.add(w)` where w < len <= capacity
+            // - `get_unchecked` is safe because i is bounded by 0..len where len == bytes.len()
             let bytes = input.as_bytes();
             let buf = out.as_mut_vec().as_mut_ptr();
             let mut w = 0usize;
@@ -100,6 +105,10 @@ impl TextNormalizer {
                 w -= 1;
             }
 
+            // SAFETY: `set_len(w)` is valid because:
+            // - We wrote exactly `w` bytes to the buffer (one byte per iteration, minus trimmed)
+            // - All bytes written are valid UTF-8 (either ASCII or pass-through)
+            // - w <= len <= capacity (enforced by the loop and reserve above)
             out.as_mut_vec().set_len(w);
         }
     }

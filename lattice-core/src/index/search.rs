@@ -13,6 +13,8 @@ impl Lattice {
     /// Returns owned results - no lifetime coupling with the engine.
     #[inline(never)]
     pub fn search(&mut self, query: &str, limit: usize) -> Vec<SearchResult> {
+        self.query_count += 1;
+
         if self.is_empty() || limit == 0 {
             return Vec::new();
         }
@@ -25,16 +27,18 @@ impl Lattice {
             return Vec::new();
         }
 
-        let mut norm_buf = String::with_capacity(256);
-        self.normalizer.normalize_into(query, &mut norm_buf);
-        let query_bytes = norm_buf.as_bytes();
+        // Use reusable buffer to avoid allocation per search
+        self.query_buf.clear();
+        self.normalizer.normalize_into(query, &mut self.query_buf);
+        let query_bytes = self.query_buf.as_bytes();
 
         if query_bytes.len() < 3 {
             return Vec::new();
         }
 
         let max_trigrams = (query_bytes.len() - 2).min(MAX_QUERY_TRIGRAMS);
-        let mut query_trigrams: SmallVec<[QueryTrigram; MAX_QUERY_TRIGRAMS]> = SmallVec::new();
+        let mut query_trigrams: SmallVec<[QueryTrigram; MAX_QUERY_TRIGRAMS]> =
+            SmallVec::with_capacity(max_trigrams);
 
         for i in 0..max_trigrams {
             let trigram =
@@ -69,7 +73,7 @@ impl Lattice {
         self.candidates.clear();
         let qt0 = query_trigrams[0];
 
-        if qt0.len as usize > MAX_CANDIDATES {
+        if qt0.len > MAX_CANDIDATES {
             return Vec::new();
         }
 
@@ -99,6 +103,7 @@ impl Lattice {
         }
 
         self.results.clear();
+        self.results.reserve(self.candidates.len().min(limit));
         for candidate in &self.candidates {
             let score =
                 self.compute_score_fast(candidate.doc_id, candidate.matches as usize, total);

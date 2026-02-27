@@ -31,9 +31,9 @@ mod tests {
     fn basic_add_and_search() {
         let mut engine = Lattice::new();
 
-        let id1 = engine.add("hello world");
-        let id2 = engine.add("hello rust");
-        let id3 = engine.add("goodbye world");
+        let id1 = engine.add("hello world").expect("should add doc");
+        let id2 = engine.add("hello rust").expect("should add doc");
+        let id3 = engine.add("goodbye world").expect("should add doc");
 
         assert_eq!(id1, 0);
         assert_eq!(id2, 1);
@@ -56,9 +56,9 @@ mod tests {
     #[test]
     fn fuzzy_search() {
         let mut engine = Lattice::new();
-        engine.add("hello world");
-        engine.add("hallo werld");
-        engine.add("helo wrld");
+        engine.add("hello world").expect("should add doc");
+        engine.add("hallo werld").expect("should add doc");
+        engine.add("helo wrld").expect("should add doc");
         let results = engine.search("hello world", 10);
         assert!(!results.is_empty());
     }
@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn empty_query() {
         let mut engine = Lattice::new();
-        engine.add("hello world");
+        engine.add("hello world").expect("should add doc");
         assert!(engine.search("", 10).is_empty());
         assert!(engine.search("a", 10).is_empty());
     }
@@ -75,7 +75,9 @@ mod tests {
     fn large_scale() {
         let mut engine = Lattice::new();
         for i in 0..1000 {
-            engine.add(&format!("document number {}", i));
+            engine
+                .add(&format!("document number {}", i))
+                .expect("should add doc");
         }
         assert!(!engine.search("document", 10).is_empty());
     }
@@ -83,9 +85,9 @@ mod tests {
     #[test]
     fn arena_storage() {
         let mut engine = Lattice::new();
-        engine.add("first document");
-        engine.add("second document");
-        engine.add("third document");
+        engine.add("first document").expect("should add doc");
+        engine.add("second document").expect("should add doc");
+        engine.add("third document").expect("should add doc");
         assert_eq!(engine.get(0), Some("first document"));
         assert_eq!(engine.get(1), Some("second document"));
         assert_eq!(engine.get(2), Some("third document"));
@@ -95,8 +97,8 @@ mod tests {
     #[test]
     fn doc_lengths_cached() {
         let mut engine = Lattice::new();
-        engine.add("hello");
-        engine.add("hello world");
+        engine.add("hello").expect("should add doc");
+        engine.add("hello world").expect("should add doc");
         assert_eq!(engine.doc_lengths.get(0).copied(), Some(5));
         assert_eq!(engine.doc_lengths.get(1).copied(), Some(11));
     }
@@ -104,8 +106,8 @@ mod tests {
     #[test]
     fn clear_resets() {
         let mut engine = Lattice::new();
-        engine.add("test");
-        engine.add("document");
+        engine.add("test").expect("should add doc");
+        engine.add("document").expect("should add doc");
         assert_eq!(engine.len(), 2);
 
         engine.clear();
@@ -119,10 +121,10 @@ mod tests {
     #[test]
     fn merge_intersect_basic() {
         let mut engine = Lattice::new();
-        engine.add("hello world foo");
-        engine.add("hello world bar");
-        engine.add("hello baz foo");
-        engine.add("other text here");
+        engine.add("hello world foo").expect("should add doc");
+        engine.add("hello world bar").expect("should add doc");
+        engine.add("hello baz foo").expect("should add doc");
+        engine.add("other text here").expect("should add doc");
 
         let results = engine.search("hello world", 10);
         assert_eq!(results.len(), 2);
@@ -137,11 +139,13 @@ mod tests {
             min_overlap_ratio: 0.1,
             ..Default::default()
         });
-        permissive.add("hello world");
-        permissive.add("hello there friend");
+        permissive.add("hello world").expect("should add doc");
+        permissive
+            .add("hello there friend")
+            .expect("should add doc");
 
         let results = permissive.search("hello world", 10);
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
         assert!(results.iter().any(|r| r.doc_id == 0));
     }
 
@@ -149,7 +153,9 @@ mod tests {
     fn posting_lists_sorted() {
         let mut engine = Lattice::new();
         for i in 0..100 {
-            engine.add(&format!("document {}", i));
+            engine
+                .add(&format!("document {}", i))
+                .expect("should add doc");
         }
         let _ = engine.search("test", 1);
 
@@ -165,9 +171,9 @@ mod tests {
     fn blocks_sorted_by_trigram() {
         use lattice_types::Trigram;
         let mut engine = Lattice::new();
-        engine.add("abc");
-        engine.add("abd");
-        engine.add("xyz");
+        engine.add("abc").expect("should add doc");
+        engine.add("abd").expect("should add doc");
+        engine.add("xyz").expect("should add doc");
         let _ = engine.search("test", 1);
 
         for i in 1..engine.blocks.len() {
@@ -193,12 +199,16 @@ mod tests {
     fn incremental_indexing() {
         let mut engine = Lattice::new();
         for i in 0..10 {
-            engine.add(&format!("document {}", i));
+            engine
+                .add(&format!("document {}", i))
+                .expect("should add doc");
         }
         assert_eq!(engine.search("document", 10).len(), 10);
 
         for i in 10..20 {
-            engine.add(&format!("document {}", i));
+            engine
+                .add(&format!("document {}", i))
+                .expect("should add doc");
         }
         assert_eq!(engine.search("document", 20).len(), 20);
     }
@@ -207,17 +217,23 @@ mod tests {
     fn incremental_indexing_correctness() {
         let mut incremental = Lattice::new();
         for i in 0..5 {
-            incremental.add(&format!("word{} doc", i));
+            incremental
+                .add(&format!("word{} doc", i))
+                .expect("should add doc");
         }
         let _ = incremental.search("word", 1);
         for i in 5..10 {
-            incremental.add(&format!("word{} doc", i));
+            incremental
+                .add(&format!("word{} doc", i))
+                .expect("should add doc");
         }
         let inc = incremental.search("doc", 20);
 
         let mut fresh = Lattice::new();
         for i in 0..10 {
-            fresh.add(&format!("word{} doc", i));
+            fresh
+                .add(&format!("word{} doc", i))
+                .expect("should add doc");
         }
         let fr = fresh.search("doc", 20);
 
@@ -282,7 +298,9 @@ mod tests {
     fn compression_saves_space() {
         let mut engine = Lattice::new();
         for i in 0..100 {
-            engine.add(&format!("word{} document {}", i % 10, i));
+            engine
+                .add(&format!("word{} document {}", i % 10, i))
+                .expect("should add doc");
         }
         let _ = engine.search("test", 1);
 
@@ -310,12 +328,106 @@ mod tests {
     fn memory_usage_bytes_matches_sizes() {
         let mut engine = Lattice::new();
         for i in 0..10 {
-            engine.add(&format!("document {}", i));
+            engine
+                .add(&format!("document {}", i))
+                .expect("should add doc");
         }
         let _ = engine.search("doc", 1);
 
         let stats = engine.stats();
         let expected = engine.blocks.len() * 12 + engine.postings.len() * 4;
         assert_eq!(stats.memory_usage_bytes(), expected);
+    }
+
+    #[test]
+    fn add_batch_works() {
+        let mut engine = Lattice::new();
+        let docs = ["hello world", "rust programming", "fuzzy search"];
+        let (added, failed, err) = engine.add_batch(&docs);
+        assert_eq!(added, 3);
+        assert_eq!(failed, 0);
+        assert!(err.is_none());
+        assert_eq!(engine.len(), 3);
+
+        let results = engine.search("hello", 10);
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn rejects_oversized_documents() {
+        use lattice_types::DocumentError;
+        let mut engine = Lattice::new();
+        let oversized = "x".repeat(65536); // Just over 64KB limit
+        let result = engine.add(&oversized);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            DocumentError::TooLarge { .. }
+        ));
+
+        let exact_size = "x".repeat(65535); // Exactly at limit
+        assert!(engine.add(&exact_size).is_ok());
+    }
+
+    #[test]
+    fn rejects_control_characters() {
+        use lattice_types::DocumentError;
+        let mut engine = Lattice::new();
+
+        // Null byte
+        let result = engine.add("hello\x00world");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            DocumentError::InvalidInput { .. }
+        ));
+
+        // Bell character
+        let result = engine.add("hello\x07world");
+        assert!(result.is_err());
+
+        // DEL character
+        let result = engine.add("hello\x7fworld");
+        assert!(result.is_err());
+
+        // Valid: whitespace is allowed
+        let result = engine.add("hello world\t\n");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn metrics_tracks_operations() {
+        let mut engine = Lattice::new();
+
+        // Initially zero
+        let metrics = engine.metrics();
+        assert_eq!(metrics.documents_indexed, 0);
+        assert_eq!(metrics.queries_executed, 0);
+        assert_eq!(metrics.current_doc_count, 0);
+
+        // Add some documents
+        engine.add("doc one").unwrap();
+        engine.add("doc two").unwrap();
+        engine.add("doc three").unwrap();
+
+        let metrics = engine.metrics();
+        assert_eq!(metrics.documents_indexed, 3);
+        assert_eq!(metrics.current_doc_count, 3);
+
+        // Execute some queries
+        engine.search("doc", 10);
+        engine.search("one", 10);
+        engine.search("two", 10);
+
+        let metrics = engine.metrics();
+        assert_eq!(metrics.queries_executed, 3);
+        assert_eq!(metrics.current_doc_count, 3);
+
+        // Clear resets current count but keeps totals
+        engine.clear();
+        let metrics = engine.metrics();
+        assert_eq!(metrics.documents_indexed, 0);
+        assert_eq!(metrics.queries_executed, 0);
+        assert_eq!(metrics.current_doc_count, 0);
     }
 }

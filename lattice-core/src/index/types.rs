@@ -11,9 +11,12 @@ pub const MAX_QUERY_TRIGRAMS: usize = 30;
 
 pub const PREFIX_BONUS: u8 = 2;
 
-pub const MAX_CANDIDATES: usize = 100_000;
+pub const MAX_CANDIDATES: u32 = 100_000;
 
 pub const MAX_QUERY_LENGTH: usize = 1_000;
+
+/// Maximum document length (64KB - matches Arena u16 limit)
+pub const MAX_DOCUMENT_LENGTH: usize = 65535;
 
 pub const MAX_SEED_POSTING_LIST: usize = 100_000;
 
@@ -58,6 +61,12 @@ pub struct Lattice {
     pub(crate) candidates: SmallVec<[Candidate; 256]>,
     pub(crate) results: SmallVec<[SearchResult; 64]>,
     pub(crate) norm_buf: String,
+    /// Reusable buffer for query normalization (avoids allocation per search)
+    pub(crate) query_buf: String,
+    /// Total number of queries executed
+    pub(crate) query_count: u64,
+    /// Total number of documents added
+    pub(crate) documents_added: u64,
 }
 
 impl Default for Lattice {
@@ -81,6 +90,9 @@ impl Lattice {
             candidates: SmallVec::new(),
             results: SmallVec::new(),
             norm_buf: String::with_capacity(256),
+            query_buf: String::with_capacity(256),
+            query_count: 0,
+            documents_added: 0,
         }
     }
 
@@ -114,5 +126,29 @@ impl Lattice {
         self.doc_lengths.clear();
         self.temp_trigrams.clear();
         self.needs_rebuild = false;
+        self.query_count = 0;
+        self.documents_added = 0;
     }
+
+    /// Returns basic metrics about the engine's operation.
+    #[inline(always)]
+    #[must_use]
+    pub fn metrics(&self) -> EngineMetrics {
+        EngineMetrics {
+            documents_indexed: self.documents_added,
+            queries_executed: self.query_count,
+            current_doc_count: self.documents.len() as u64,
+        }
+    }
+}
+
+/// Basic operational metrics for the search engine.
+#[derive(Debug, Clone, Copy)]
+pub struct EngineMetrics {
+    /// Total number of documents added (including those that may have been cleared).
+    pub documents_indexed: u64,
+    /// Total number of search queries executed.
+    pub queries_executed: u64,
+    /// Current number of documents in the index.
+    pub current_doc_count: u64,
 }
