@@ -26,6 +26,17 @@
 //! 3. **Single pass**: No separate detection/normalization phases.
 //! 4. **Unsafe only for buffer writes**: Bounds checked by `reserve()`.
 
+/// Branchless whitespace lookup table.
+/// Matches: space (0x20), tab (0x09), newline (0x0a), carriage return (0x0d)
+const WS_TABLE: [bool; 256] = {
+    let mut table = [false; 256];
+    table[b' ' as usize] = true;
+    table[b'\t' as usize] = true;
+    table[b'\n' as usize] = true;
+    table[b'\r' as usize] = true;
+    table
+};
+
 /// Zero-copy ASCII text normalizer.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TextNormalizer;
@@ -70,15 +81,9 @@ impl TextNormalizer {
             for i in 0..len {
                 let b = *bytes.get_unchecked(i);
 
-                // Branchless ASCII whitespace detection
+                // Branchless ASCII whitespace detection using lookup table
                 // Matches: space (0x20), tab (0x09), newline (0x0a), carriage return (0x0d)
-                // Formula: (b <= 0x20) && (b == 0x20 || b == 0x09 || b == 0x0a || b == 0x0d)
-                // Simplified: check common cases first
-                let is_ws = if b == b' ' {
-                    true
-                } else {
-                    b == b'\t' || b == b'\n' || b == b'\r'
-                };
+                let is_ws = WS_TABLE[b as usize];
 
                 if is_ws {
                     // Only write space if not already in whitespace run

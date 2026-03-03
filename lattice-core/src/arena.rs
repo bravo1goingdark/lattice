@@ -118,7 +118,7 @@ impl Arena {
 
         // Ensure capacity with 1.5x growth factor for better memory efficiency
         if offset + len > self.buffer.capacity() {
-            let new_cap = (self.buffer.capacity() * 3 / 2).max(offset + len).max(4096);
+            let new_cap = (self.buffer.capacity() * 2).max(offset + len).max(4096);
             self.buffer.reserve(new_cap - self.buffer.capacity());
         }
 

@@ -2,7 +2,7 @@
 members = [
     "lattice-core",
     "lattice-types",
-    "lattice-cli"
+    "lattice-demo"
 ]
 
 resolver = "2"

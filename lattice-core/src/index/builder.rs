@@ -17,8 +17,24 @@ impl Lattice {
     ///
     /// When a committed index already exists, the delta is sorted, converted
     /// to blocks, then merged with the committed index in O(N + Δ).
+    ///
+    /// ## Lazy rebuild (latency optimization)
+    ///
+    /// If uncommitted trigrams are below REBUILD_THRESHOLD, we keep them separate
+    /// and merge results at query time. This avoids O(N) copy cost during
+    /// incremental adds while keeping search latency bounded (O(threshold)).
     pub(crate) fn rebuild_index(&mut self) {
+        use crate::index::types::REBUILD_THRESHOLD;
+
         if self.temp_trigrams.is_empty() {
+            self.needs_rebuild = false;
+            return;
+        }
+
+        // Lazy rebuild: if under threshold, just sort and keep as delta
+        // This avoids expensive merge for small incremental updates
+        if self.temp_trigrams.len() < REBUILD_THRESHOLD && !self.blocks.is_empty() {
+            Self::sort_trigrams(&mut self.temp_trigrams);
             self.needs_rebuild = false;
             return;
         }

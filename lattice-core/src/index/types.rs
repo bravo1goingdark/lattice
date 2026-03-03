@@ -22,6 +22,10 @@ pub const MAX_SEED_POSTING_LIST: usize = 100_000;
 
 pub const RADIX_SORT_THRESHOLD: usize = 512;
 
+/// Maximum uncommitted trigrams before forced rebuild.
+/// Keeps search latency bounded by limiting linear scan of uncommitted data.
+pub const REBUILD_THRESHOLD: usize = 50_000;
+
 #[derive(Clone, Copy, Debug)]
 pub struct PostingBlock {
     pub trigram: Trigram,
