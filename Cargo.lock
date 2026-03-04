@@ -7,29 +7,14 @@ name = "lattice-core"
 version = "0.1.0"
 dependencies = [
  "lattice-types",
- "libc",
  "memchr",
  "rustc-hash",
  "smallvec",
 ]
 
 [[package]]
-name = "lattice-demo"
-version = "0.1.0"
-dependencies = [
- "lattice-core",
- "lattice-types",
-]
-
-[[package]]
 name = "lattice-types"
 version = "0.1.0"
-
-[[package]]
-name = "libc"
-version = "0.2.182"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
 
 [[package]]
 name = "memchr"

@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "lattice-core",
-    "lattice-types",
-    "lattice-demo"
+    "lattice-types"
 ]
 
 resolver = "2"

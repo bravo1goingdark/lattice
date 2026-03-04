@@ -20,7 +20,7 @@ mod stats;
 mod types;
 
 pub use stats::IndexStats;
-pub use types::Lattice;
+pub use types::{EngineMetrics, Lattice};
 
 #[cfg(test)]
 mod tests {
